@@ -36,7 +36,6 @@ def get_asset(*args, dtype=None):
 # The following functions are taken from
 # https://github.com/pytorch/vision/blob/cd0268cd408d19d91f870e36fdffd031085abe13/torchvision/datasets/utils.py
 
-from torchvision.datasets.utils import _get_confirm_token, _save_response_content
 
 def _quota_exceeded(response: "requests.models.Response"):
     return False
@@ -70,6 +69,13 @@ def download_file_from_google_drive(file_id, root, filename=None, md5=None):
         session = requests.Session()
 
         response = session.get(url, params={'id': file_id}, stream=True)
+
+        def _get_confirm_token(response):
+            for key, value in response.cookies.items():
+                if key.startswith('download_warning'):
+                    return value
+
+            return None
         token = _get_confirm_token(response)
 
         if token:
@@ -83,5 +89,12 @@ def download_file_from_google_drive(file_id, root, filename=None, md5=None):
                 f"and can only be overcome by trying again later."
             )
             raise RuntimeError(msg)
+        
+        def _save_response_content(response, destination):
+            CHUNK_SIZE = 32768
 
+            with open(destination, "wb") as f:
+                for chunk in response.iter_content(CHUNK_SIZE):
+                    if chunk:  # filter out keep-alive new chunks
+                        f.write(chunk)
         _save_response_content(response, fpath)
